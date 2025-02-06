@@ -1,0 +1,100 @@
+---
+title: Build organ and condition based GRN
+author: Dillon Scott
+date: 1/24/25
+output: html_document
+---
+
+Using GRaNIE methodology: [https://www.embopress.org/doi/full/10.15252/msb.202311627](https://www.embopress.org/doi/full/10.15252/msb.202311627)
+
+```{r install packages}
+# if (!require("BiocManager", quietly = TRUE)) {
+#   install.packages("BiocManager")
+# }
+
+# BiocManager::install("GRaNIE")
+# BiocManager::install(c("TxDb.Hsapiens.UCSC.hg38.knownGene", "BSgenome.Hsapiens.UCSC.hg38"))
+# BiocManager::install("org.Hs.eg.db")
+```
+
+```{r load packages}
+library(readr)
+library(GRaNIE)
+library(dplyr)
+library(org.Hs.eg.db)
+```
+
+```{r load data}
+datafolder <- "/projectnb/paxlab/EnhancerDiscovery/data"
+genes_file <- paste0(
+  datafolder,
+  "/Bulk-Ribo-Depleted-RNAseq-Heart-Lung-Liver_Human_FBs/hFB_riboDepletedBulkRnaSeq/NF_out/star_salmon/salmon.merged.transcript_tpm.tsv"
+)
+peaks_file <- paste0(
+  datafolder,
+  "/Bulk-ATAC-Heart-Lung-Liver_Human_FBs/NF_out/bwa/merged_library/macs2/broad_peak/consensus/consensus_peaks.mLb.clN.featureCounts.txt"
+)
+
+counts_rna_df <- read_tsv(genes_file, col_types = cols())
+counts_peaks_df <- read_tsv(peaks_file, col_types = cols(), skip = 1)
+```
+
+GRaNIE expects paired samples. Since we do not have paired samples, we will average across replicates and pseudo-pair organ/condition averages.
+
+```{r average data}
+organ_names <- c("Heart", "Lung", "Liver")
+condition_names <- c("Unstim", "TGFb", "TGFb+JQ1")
+rna_cols <- c("Unstim", "TGFb", "TGFb_._JQ1")
+atac_cols <- c("Untim", "TGFB", "TGFB_JQ1")
+
+counts_rna_avg_df <- data.frame(ENSEMBL = counts_rna_df$gene_id)
+for (organ in organ_names) {
+  for (condition in rna_cols) {
+    counts_rna_avg_df[paste(organ, condition_names[match(condition, rna_cols)], sep = "_")] <-
+      rowMeans(counts_rna_df %>% dplyr::select(matches(paste0(organ, ".+", condition, "_...$"))))
+  }
+}
+
+counts_peaks_avg_df <- data.frame(peakID = paste0(counts_peaks_df$Chr, ":", counts_peaks_df$Start, "-", counts_peaks_df$End))
+for (organ in organ_names) {
+  for (condition in atac_cols) {
+    counts_peaks_avg_df[paste(organ, condition_names[match(condition, atac_cols)], sep = "_")] <-
+      rowMeans(counts_peaks_df %>% dplyr::select(matches(paste(condition, organ, sep = "_"))))
+  }
+}
+
+metadata_df <- data.frame(sample_id = colnames(counts_peaks_avg_df)[-1])
+metadata_df$organ <- unlist(strsplit(metadata_df$sample_id, "_"))[c(TRUE, FALSE)]
+metadata_df$condition <- unlist(strsplit(metadata_df$sample_id, "_"))[c(FALSE, TRUE)]
+```
+
+Convert gene symbol to ENSEMBL
+
+```{r convert gene ids}
+counts_rna_avg_df$ENSEMBL <- mapIds(org.Hs.eg.db, keys = counts_rna_avg_df$ENSEMBL, column = "ENSEMBL", keytype = "SYMBOL")
+```
+
+
+Steps followed from [sample GRaNIE workflow](https://bioconductor.org/packages/release/bioc/vignettes/GRaNIE/inst/doc/GRaNIE_workflow.html).
+
+```{r initialize GRaNIE}
+grn <- initializeGRN(
+  outputFolder = "./data",
+  genomeAssembly = "hg38"
+)
+grn
+```
+
+```{r add data to GRaNIE}
+grn <- addData(grn,
+  counts_peaks = counts_peaks_avg_df, normalization_peaks = "none",
+  counts_rna = counts_rna_avg_df, normalization_rna = "none",
+  sampleMetadata = metadata_df, forceRerun = TRUE
+)
+grn
+```
+
+
+```{r qc time!}
+plotPCA_all(grn)
+```
