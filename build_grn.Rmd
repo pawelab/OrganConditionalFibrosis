@@ -8,6 +8,7 @@ output: html_document
 Using GRaNIE methodology: [https://www.embopress.org/doi/full/10.15252/msb.202311627](https://www.embopress.org/doi/full/10.15252/msb.202311627)
 
 ```{r install packages}
+# remotes::install_github("mojaveazure/seurat-disk")
 # if (!require("BiocManager", quietly = TRUE)) {
 #   install.packages("BiocManager")
 # }
@@ -15,6 +16,7 @@ Using GRaNIE methodology: [https://www.embopress.org/doi/full/10.15252/msb.20231
 # BiocManager::install("GRaNIE")
 # BiocManager::install(c("TxDb.Hsapiens.UCSC.hg38.knownGene", "BSgenome.Hsapiens.UCSC.hg38"))
 # BiocManager::install("org.Hs.eg.db")
+# BiocManager::install("ChIPseeker")
 ```
 
 ```{r load packages}
@@ -22,9 +24,22 @@ library(readr)
 library(GRaNIE)
 library(dplyr)
 library(org.Hs.eg.db)
+# library(SeuratDisk)
+```
+
+```{r convert data from Anndata to Seurat}
+# Convert("./data/rna.h5ad", dest = "h5seurat", assay = "RNA", overwrite = TRUE)
+# Convert("./data/atac.h5ad", dest = "h5seurat", assay = "ATAC", overwrite = TRUE)
 ```
 
 ```{r load data}
+# rna_seurat <- LoadH5Seurat("./data/rna.h5seurat")
+
+# rna_adata <- read_h5ad("data/rna.h5ad")
+# atac_adata <- read_h5ad("data/rna.h5ad")
+```
+
+```{r load data (old)}
 datafolder <- "/projectnb/paxlab/EnhancerDiscovery/data"
 genes_file <- paste0(
   datafolder,
@@ -96,5 +111,29 @@ grn
 
 
 ```{r qc time!}
-plotPCA_all(grn)
+grn <- plotPCA_all(grn)
+```
+
+```{r gene-enhancer connections}
+grn <- addConnections_peak_gene(grn)
+grn <- plotDiagnosticPlots_peakGene(grn,
+  gene.types = list(c("protein_coding", "lincRNA")),
+  plotAsPDF = FALSE, pages = 1
+)
+```
+
+```{r view connections}
+grn_connections_all <- getGRNConnections(grn,
+  type = "peak_genes",
+)
+
+grn_connections_all
+```
+
+```{r build grn}
+grn <- build_eGRN_graph(grn, forceRerun = TRUE)
+```
+
+```{r visualize grn}
+grn <- visualizeGRN(grn, plotAsPDF = FALSE, maxEdgesToPlot = 1000)
 ```
