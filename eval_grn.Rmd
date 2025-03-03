@@ -1,0 +1,61 @@
+---
+title: Build organ and condition based GRN
+author: Dillon Scott
+date: 1/24/25
+output: html_document
+---
+
+Using GRaNIE methodology: [https://www.embopress.org/doi/full/10.15252/msb.202311627](https://www.embopress.org/doi/full/10.15252/msb.202311627)
+
+```{r load grn from disk}
+outputFolder <- "./data"
+grn_file_rds <- paste0(outputFolder, "/GRN.rds")
+grn <- readRDS(grn_file_rds)
+```
+
+```{r combine and filter connections}
+grn <- filterGRNAndConnectGenes(grn,
+  TF_peak.fdr.threshold = 0.2, peak_gene.fdr.threshold = 0.2,
+  peak_gene.fdr.method = "BH", gene.types = c("protein_coding", "lincRNA"), allowMissingTFs = FALSE,
+  allowMissingGenes = FALSE, forceRerun = TRUE
+)
+```
+
+```{r view connections}
+grn_connections_all <- getGRNConnections(grn,
+  type = "all.filtered",
+)
+
+grn_connections_all
+```
+
+```{r stats summary}
+grn <- generateStatsSummary(grn,
+  TF_peak.fdr = c(0.05, 0.1, 0.2), TF_peak.connectionTypes = "all",
+  peak_gene.fdr = c(0.1, 0.2), peak_gene.r_range = c(0, 1), allowMissingGenes = c(
+    FALSE,
+    TRUE
+  ), allowMissingTFs = c(FALSE), gene.types = c("protein_coding", "lincRNA"),
+  forceRerun = TRUE
+)
+```
+
+```{r plot stats summary}
+grn <- plot_stats_connectionSummary(grn, type = "boxplot", plotAsPDF = TRUE, pages = 3)
+```
+
+```{r build grn}
+grn <- build_eGRN_graph(grn, forceRerun = TRUE)
+```
+
+```{r visualize grn}
+grn <- visualizeGRN(grn, plotAsPDF = TRUE, maxEdgesToPlot = 1000)
+```
+
+```{r network summary}
+grn <- performAllNetworkAnalyses(grn, ontology = c("GO_BP"), forceRerun = TRUE)
+```
+
+```{r}
+grn@connections
+```

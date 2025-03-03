@@ -1,0 +1,34 @@
+#!/bin/bash -l
+
+# All lines starting with "#$" are SGE qsub commands
+
+# Specify a project to run under
+#$ -P paxlab
+
+# Give this job a name
+#$ -N build_grn
+
+# Join standard output and error to a single file
+#$ -j y
+
+# Name the file where to redirect standard output and error
+#$ -o logs/build_grn.log
+
+# Send an email when the job finishes
+#$ -m eas
+
+# Request a large memory node, this will affect your queue time, but it's better to overestimate
+#$ -l mem_per_core=8G
+
+# Request more cores, this will affect your queue time, make sure your program supports multithreading, or it's a waste
+#$ -pe omp 4
+
+source ./common.sh
+prerun
+
+# load modules
+module load R/4.4.0
+
+run "Rscript --vanilla build_grn.R"
+
+postrun
