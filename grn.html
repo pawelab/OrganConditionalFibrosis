@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html style="height: 100%; width: 100%;">
+  <head>
+    <title>PG-SCOTT GRN</title>
+    <script type="module">
+      import { build } from "./visualize_grn.js";
+      build("./data/grn.json").then((grnElement) => {
+        document.getElementById("container").append(grnElement);
+      });
+    </script>
+  </head>
+  <body style="height: 100%; width: 100%;">
+    <div id="container" style="height: 100%; width: 100%;"></div>
+  </body>
+</html>
