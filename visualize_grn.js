@@ -55,7 +55,7 @@ const build = async (grnPath) => {
 
 
   const textContainer = container.append("div").attr("style", 
-    "position: fixed; top: 0; right: 0; padding: 0.5rem; width: 15rem; background-color: #fff; border: 1px solid #000; border-top: 0; border-right: 0;");
+    "position: fixed; top: 0; right: 0; padding: 0.5rem; width: 15rem; background-color: #fff; border: 1px solid #000; border-top: 0; border-right: 0; border-radius: 0 0 0 3px;");
 
   // Add search functionality
   const searchForm = textContainer.append("form");
@@ -152,13 +152,28 @@ const build = async (grnPath) => {
         .on("drag", dragged)
         .on("end", dragended));
 
+  // Add tooltips for nodes
+  const tooltip = container.append("p")
+    .style("opacity", 0)
+    .style("position", "absolute")
+    .style("margin", 0)
+    .style("background-color", "#fff")
+    .style("border", "1px solid black")
+    .style("border-radius", "3px")
+    .style("padding", "0.25rem 0.5rem");
+  
+  node.on("mouseover", (evt, d) => {
+    tooltip.style("opacity", 1).style("top", `${evt.pageY - 10}px`).style("left", `${evt.pageX + 10}px`).text(d.id);
+  })
+  node.on("mouseleave", (_evt) => {
+    tooltip.style("opacity", 0)
+  })
+
   // On click node, select that node
   node.on("click", (_evt, d) => selectNode(d.id))
 
   // On click edge, if one node is selected, select the other node
   link.on("click", (_evt, d) => {
-    console.log(selected)
-    console.log(d)
     if (selected === d.source.id) { 
       selectNode(d.target.id) 
     } else if (selected === d.target.id) {
