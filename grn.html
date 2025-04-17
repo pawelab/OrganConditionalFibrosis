@@ -4,9 +4,8 @@
     <title>PG-SCOTT GRN</title>
     <script type="module">
       import { build } from "./visualize_grn.js";
-      build("./data/grn.json").then((grnElement) => {
-        document.getElementById("container").append(grnElement);
-      });
+      const grnElement = build("./data/grn.json")
+      document.getElementById("container").append(grnElement);
     </script>
   </head>
   <body style="height: 100%; width: 100%; margin: 0;">
