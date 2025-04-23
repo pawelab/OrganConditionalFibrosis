@@ -17,9 +17,24 @@ function transform([x, y, r]) {
   `;
 }
 
-const typeToSymbol = {
-  'peak': d3.symbol().type(d3.symbolTriangle),
-  'gene': d3.symbol().type(d3.symbolCircle)
+function dataToSymbol(data) {
+  if (data.node_type === 'peak') {
+    return d3.symbol().type(d3.symbolTriangle)
+  } else if (data.node_type === 'gene') {
+    if (data.tf_coding) {
+      return d3.symbol().type(d3.symbolSquare)
+    } else {
+      return d3.symbol().type(d3.symbolCircle)
+    }
+  }
+}
+
+function dataToColor(data) {
+  const scaleFactor = Math.pow(2, 1 / 255)
+  const red = Math.round(Math.log(data.Heart.condition_sensitivity + 1) / Math.log(scaleFactor)).toString(16).padStart(2, "0")
+  const green = Math.round(Math.log(data.Lung.condition_sensitivity + 1) / Math.log(scaleFactor)).toString(16).padStart(2, "0")
+  const blue = Math.round(Math.log(data.Liver.condition_sensitivity + 1) / Math.log(scaleFactor)).toString(16).padStart(2, "0")
+  return `#${red}${green}${blue}`;
 }
 
 async function fetchWithRetry(url, nRetries = 5) {
@@ -42,9 +57,10 @@ const build = (grnPath) => {
   const res = fetchWithRetry(grnPath);
 
   // Specify the color scale.
-  const color = d3.scaleOrdinal(d3.schemeCategory10);
-  const organSpecific = color(true)
-  const universal = color(false)
+  const heart = dataToColor(Object.fromEntries([['Heart', 1.0], ['Lung', 0.0], ['Liver', 0.0]].map(([organ, val]) => [organ, {condition_sensitivity: val}])))
+  const lung = dataToColor(Object.fromEntries([['Heart', 0.0], ['Lung', 1.0], ['Liver', 0.0]].map(([organ, val]) => [organ, {condition_sensitivity: val}])))
+  const liver = dataToColor(Object.fromEntries([['Heart', 0.0], ['Lung', 0.0], ['Liver', 1.0]].map(([organ, val]) => [organ, {condition_sensitivity: val}])))
+  const universal = dataToColor(Object.fromEntries([['Heart', 1.0], ['Lung', 1.0], ['Liver', 1.0]].map(([organ, val]) => [organ, {condition_sensitivity: val}])))
 
   const container = d3.create("div").style("display", "flex")
 
@@ -65,7 +81,7 @@ const build = (grnPath) => {
   
   // Add display text for showing selected node information
   const displayText = textContainer.append("xhtml:p").style("margin", "0.5rem 0");
-  displayText.html(" <br> <br> <br> <br>");
+  displayText.html(" <br> <br> <br> <br> <br> <br>");
 
   const svg = outerSvg.append("g");
 
@@ -84,24 +100,18 @@ const build = (grnPath) => {
     .attr("d", "M0,-5L10,0L0,5");
 
   // Add a legend for colors
-  textContainer.append("svg")
+  const colors = [[heart, "Heart"], [lung, "Lung"], [liver, "Liver"]]
+  colors.forEach(([fillColor, txt]) => {
+    textContainer.append("svg")
     .attr("width", 12)
     .attr("height", 12)
     .append("rect")
       .attr("width", 12)
       .attr("height", 12)
       .attr("rx", 2)
-      .attr("fill", organSpecific)
-  textContainer.append("span").style("margin", "0 15px 0 5px").text("Organ-specific")
-  textContainer.append("svg")
-    .attr("width", 12)
-    .attr("height", 12)
-    .append("rect")
-      .attr("width", 12)
-      .attr("height", 12)
-      .attr("rx", 2)
-      .attr("fill", universal)
-  textContainer.append("span").style("margin", "0 5px").text("Universal")
+      .attr("fill", fillColor)
+    textContainer.append("span").style("margin", "0 15px 0 5px").text(txt)
+  })
 
   // Add a legend for shapes
   textContainer.append("br")
@@ -110,7 +120,7 @@ const build = (grnPath) => {
     .attr("height", 12)
     .attr("viewBox", "-8 -10 16 16")
     .append("path")
-      .attr("d", typeToSymbol['peak']())
+      .attr("d", dataToSymbol({node_type: 'peak'})())
       .attr("fill", "black")
   textContainer.append("span").style("margin", "0 15px 0 5px").text("Peak")
   textContainer.append("svg")
@@ -118,9 +128,17 @@ const build = (grnPath) => {
     .attr("height", 12)
     .attr("viewBox", "-6 -6 12 12")
     .append("path")
-      .attr("d", typeToSymbol['gene']())
+      .attr("d", dataToSymbol({node_type: 'gene', tf_coding: false})())
       .attr("fill", "black")
   textContainer.append("span").style("margin", "0 15px 0 5px").text("Gene")
+  textContainer.append("svg")
+    .attr("width", 12)
+    .attr("height", 12)
+    .attr("viewBox", "-6 -6 12 12")
+    .append("path")
+      .attr("d", dataToSymbol({node_type: 'gene', tf_coding: true})())
+      .attr("fill", "black")
+  textContainer.append("span").style("margin", "0 15px 0 5px").text("TF")
 
   // Allow for panning and zooming
   let currTransform = [0, 0, width]
@@ -157,7 +175,9 @@ const build = (grnPath) => {
   res.then(data => {
     // The force simulation mutates links and nodes, so create a copy
     // so that re-evaluating this cell produces the same result.
-    const allNodes = data.nodes.map(node => ({...node, id: String(node.id)})).filter(node => node.condition_sensitivity > 0.05);
+    const allNodes = data.nodes.map(node => ({...node, id: String(node.id)})).filter(node => 
+      (node.Heart.condition_sensitivity + node.Liver.condition_sensitivity + node.Lung.condition_sensitivity) > 0.05 || 
+      (node.node_type === 'gene' && node.tf_coding && (node.Heart.condition_sensitivity + node.Liver.condition_sensitivity + node.Lung.condition_sensitivity) > 0.03));
     const allLinks = Object.entries(data.edges).flatMap(([source, targets]) => targets.map(t => ({source: String(source), target: String(t)})));
 
     // Filter out links without both nodes and nodes with no links iteratively
@@ -197,9 +217,22 @@ const build = (grnPath) => {
       .data(nodes)
       .join("path")
         .attr("cursor", "pointer")
+        // .attr("fill", "transparent")
         .attr("id", d => `id${d.id}`)
-        .attr("fill", d => color(d.organ_specificity > d.universality))
-        .attr("d", d => typeToSymbol[d.node_type].size(100)());
+        .attr("fill", d => dataToColor(d))
+        .attr("d", d => dataToSymbol(d).size(100)());
+
+    // const nodeInternal = node.append("foreignObject")
+    //   .attr("x", 0)
+    //   .attr("y", 0)
+    //   .attr("width", 12)
+    //   .attr("height", 12)
+    //   .style("overflow", "visible")
+    // node.append("xhtml:div")
+    //     .style("fill", "blue")
+    //     .style("width", "100%")
+    //     .style("height", "100%")
+        // .style("background", d => `conic-gradient(${color(d.organ_specificity)}, ${color(d.universality)})`)
 
     // Add a drag behavior.
     node.call(d3.drag()
@@ -247,6 +280,8 @@ const build = (grnPath) => {
 
       node
         .attr("transform", d => `translate(${d.x},${d.y})`);
+
+      // nodeInternal.attr("transform", d => `translate(${d.x},${d.y})`);
     });
 
     // Reheat the simulation when drag starts, and fix the subject position.
@@ -284,9 +319,9 @@ const build = (grnPath) => {
         ${d.chr}:${d.start}-${d.end}<br/>
         ${d.node_type === 'gene' ? `<a target="_blank" href="https://www.genecards.org/cgi-bin/carddisp.pl?gene=${d.id}">View on GeneCards</a>` : 
           `<a target="_blank" href="https://screen.wenglab.org/search?assembly=GRCh38&chromosome=${d.chr}&start=${d.start}&end=${d.end}">View in SCREEN</a>`}<br/>
-        Condition sensitivity score: ${d.condition_sensitivity.toFixed(5)}<br/>
-        Organ specificity score: ${d.organ_specificity.toFixed(5)}<br/>
-        Universality score: ${d.universality.toFixed(5)}`);
+        Condition sensitivity score: ${/*d.condition_sensitivity.toFixed(5)*/""}<br/>
+        Organ specificity score: ${/*d.organ_specificity.toFixed(5)*/""}<br/>
+        Universality score: ${/*d.universality.toFixed(5)*/""}`);
 
       const endTransform = [d.x, d.y, width / 5];
       const i = d3.interpolateZoom(currTransform, endTransform)
