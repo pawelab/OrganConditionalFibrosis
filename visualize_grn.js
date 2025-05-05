@@ -1,4 +1,7 @@
 import * as d3 from "https://cdn.jsdelivr.net/npm/d3@7/+esm";
+// import spawn from 'node:child_process';
+
+// spawn('echo', ['foobar'])
 
 // Declare the chart dimensions and margins.
 let width = window.innerWidth;
@@ -30,11 +33,13 @@ function dataToSymbol(data) {
 }
 
 function dataToColor(data) {
-  const scaleFactor = Math.pow(2, 1 / 255)
-  const red = Math.round(Math.log(data.Heart.condition_sensitivity + 1) / Math.log(scaleFactor)).toString(16).padStart(2, "0")
-  const green = Math.round(Math.log(data.Lung.condition_sensitivity + 1) / Math.log(scaleFactor)).toString(16).padStart(2, "0")
-  const blue = Math.round(Math.log(data.Liver.condition_sensitivity + 1) / Math.log(scaleFactor)).toString(16).padStart(2, "0")
-  return `#${red}${green}${blue}`;
+  const red = data.Heart.organ_specificity
+  const green = data.Lung.organ_specificity
+  const blue = data.Liver.organ_specificity
+  const scalePositive = [red, green, blue].map(col => col + 1 / 3).map(col => Math.max(col, 0.0))
+  const max = Math.max(...scalePositive)
+  const hex = scalePositive.map(col => col * 1 / max).map(col => Math.round(col * 255).toString(16).padStart(2, "0")).join("")
+  return `#${hex}`;
 }
 
 async function fetchWithRetry(url, nRetries = 5) {
@@ -57,10 +62,10 @@ const build = (grnPath) => {
   const res = fetchWithRetry(grnPath);
 
   // Specify the color scale.
-  const heart = dataToColor(Object.fromEntries([['Heart', 1.0], ['Lung', 0.0], ['Liver', 0.0]].map(([organ, val]) => [organ, {condition_sensitivity: val}])))
-  const lung = dataToColor(Object.fromEntries([['Heart', 0.0], ['Lung', 1.0], ['Liver', 0.0]].map(([organ, val]) => [organ, {condition_sensitivity: val}])))
-  const liver = dataToColor(Object.fromEntries([['Heart', 0.0], ['Lung', 0.0], ['Liver', 1.0]].map(([organ, val]) => [organ, {condition_sensitivity: val}])))
-  const universal = dataToColor(Object.fromEntries([['Heart', 1.0], ['Lung', 1.0], ['Liver', 1.0]].map(([organ, val]) => [organ, {condition_sensitivity: val}])))
+  const heart = dataToColor(Object.fromEntries([['Heart', 1.0], ['Lung', -0.5], ['Liver', -0.5]].map(([organ, val]) => [organ, {organ_specificity: val}])))
+  const lung = dataToColor(Object.fromEntries([['Heart', -0.5], ['Lung', 1.0], ['Liver', -0.5]].map(([organ, val]) => [organ, {organ_specificity: val}])))
+  const liver = dataToColor(Object.fromEntries([['Heart', -0.5], ['Lung', -0.5], ['Liver', 1.0]].map(([organ, val]) => [organ, {organ_specificity: val}])))
+  const universal = dataToColor(Object.fromEntries([['Heart', 0.0], ['Lung', 0.0], ['Liver', 0.0]].map(([organ, val]) => [organ, {organ_specificity: val}])))
 
   const container = d3.create("div").style("display", "flex")
 
@@ -81,7 +86,9 @@ const build = (grnPath) => {
   
   // Add display text for showing selected node information
   const displayText = textContainer.append("xhtml:p").style("margin", "0.5rem 0");
-  displayText.html(" <br> <br> <br> <br> <br> <br>");
+  const displayTextBreaks = " <br> <br> <br> <br> <br> <br>"
+  const emptyDisplayText = `Click around or search to see more.${displayTextBreaks}`
+  displayText.html(emptyDisplayText);
 
   const svg = outerSvg.append("g");
 
@@ -194,8 +201,8 @@ const build = (grnPath) => {
 
     // Create a simulation with several forces.
     const simulation = d3.forceSimulation(nodes)
-        .force("link", d3.forceLink(links).id(d => d.id))
-        .force("charge", d3.forceManyBody())
+        .force("link", d3.forceLink(links).id(d => d.id).distance(_ => 20))
+        .force("charge", d3.forceManyBody().strength(node => node.node_type === 'gene' && node.tf_coding ? -80 : -30))
         .force("x", d3.forceX())
         .force("y", d3.forceY());
 
@@ -206,33 +213,21 @@ const build = (grnPath) => {
       .selectAll("line")
       .data(links)
       .join("line")
+        .attr("id", d => `index${d.index}`)
         .attr("stroke-width", 1)
         .attr("marker-end", "url(#arrow)");
 
     // Add nodes
     const node = svg.append("g")
-        .attr("stroke", "#fff")
-        .attr("stroke-width", 1.5)
+        .attr("stroke", "#000")
+        .attr("stroke-width", 0.5)
       .selectAll("path")
       .data(nodes)
       .join("path")
         .attr("cursor", "pointer")
-        // .attr("fill", "transparent")
         .attr("id", d => `id${d.id}`)
         .attr("fill", d => dataToColor(d))
         .attr("d", d => dataToSymbol(d).size(100)());
-
-    // const nodeInternal = node.append("foreignObject")
-    //   .attr("x", 0)
-    //   .attr("y", 0)
-    //   .attr("width", 12)
-    //   .attr("height", 12)
-    //   .style("overflow", "visible")
-    // node.append("xhtml:div")
-    //     .style("fill", "blue")
-    //     .style("width", "100%")
-    //     .style("height", "100%")
-        // .style("background", d => `conic-gradient(${color(d.organ_specificity)}, ${color(d.universality)})`)
 
     // Add a drag behavior.
     node.call(d3.drag()
@@ -258,7 +253,10 @@ const build = (grnPath) => {
     })
 
     // On click node, select that node
-    node.on("click", (_evt, d) => selectNode(d.id))
+    node.on("click", (evt, d) => {
+      evt.stopPropagation()
+      selectNode(d.id)
+    })
 
     // On click edge, if one node is selected, select the other node
     let selected = '';
@@ -270,6 +268,8 @@ const build = (grnPath) => {
       }
     })
 
+    outerSvg.on("click", () => deselectNode())
+
     // Set the position attributes of links and nodes each time the simulation ticks.
     simulation.on("tick", () => {
       link
@@ -280,8 +280,6 @@ const build = (grnPath) => {
 
       node
         .attr("transform", d => `translate(${d.x},${d.y})`);
-
-      // nodeInternal.attr("transform", d => `translate(${d.x},${d.y})`);
     });
 
     // Reheat the simulation when drag starts, and fix the subject position.
@@ -307,21 +305,31 @@ const build = (grnPath) => {
 
     // Zoom to a node with the given data, show data in displayText
     function selectNode(nodeId) {
-      node.attr("stroke", "#fff")
+      node.attr("stroke", "#000")
+      node.attr("opacity", 0.1)
+      link.attr("opacity", 0.1)
       const d = nodes.find(n => n.id === nodeId)
+      const selectedEdges = links.filter(e => e.source.id === nodeId || e.target.id === nodeId)
       selected = nodeId
       if (!d) {
-        displayText.html(`Gene/Peak '${nodeId}' not found.`)
+        deselectNode()
+        displayText.html(`Gene/Peak '${nodeId}' not found. ${displayTextBreaks}`)
         return
       }
       svg.select(`#id${d.id}`).attr("stroke", "red")
+      selectedEdges.forEach(e => {
+        svg.select(`#index${e.index}`).attr("opacity", 1)
+        svg.select(`#id${e.source.id}`).attr("opacity", 1)
+        svg.select(`#id${e.target.id}`).attr("opacity", 1)
+      })
+      
       displayText.html(`${d.node_type === 'peak' ? 'Peak' : 'Gene'}: ${d.id}<br/>
         ${d.chr}:${d.start}-${d.end}<br/>
         ${d.node_type === 'gene' ? `<a target="_blank" href="https://www.genecards.org/cgi-bin/carddisp.pl?gene=${d.id}">View on GeneCards</a>` : 
           `<a target="_blank" href="https://screen.wenglab.org/search?assembly=GRCh38&chromosome=${d.chr}&start=${d.start}&end=${d.end}">View in SCREEN</a>`}<br/>
-        Condition sensitivity score: ${/*d.condition_sensitivity.toFixed(5)*/""}<br/>
-        Organ specificity score: ${/*d.organ_specificity.toFixed(5)*/""}<br/>
-        Universality score: ${/*d.universality.toFixed(5)*/""}`);
+        Condition sensitivity: ${['Heart', 'Lung', 'Liver'].map(organ => d[organ].condition_sensitivity.toFixed(2)).join(" ")}<br/>
+        Organ specificity: ${['Heart', 'Lung', 'Liver'].map(organ => d[organ].organ_specificity.toFixed(2)).join(" ")}<br/>
+        Universality: ${d.universality.toFixed(5)}`);
 
       const endTransform = [d.x, d.y, width / 5];
       const i = d3.interpolateZoom(currTransform, endTransform)
@@ -330,6 +338,13 @@ const build = (grnPath) => {
         .duration(i.duration)
         .attrTween("transform", () => t => transform(currTransform = i(t)));
       d3.zoomTransform(outerSvg, endTransform)
+    }
+
+    function deselectNode() {
+      node.attr("stroke", "#000")
+      node.attr("opacity", 1)
+      link.attr("opacity", 1)
+      displayText.html(emptyDisplayText)
     }
 
     // Add search listener
