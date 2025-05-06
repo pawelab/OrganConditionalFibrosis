@@ -42,10 +42,10 @@ function dataToColor(data) {
   return `#${hex}`;
 }
 
-async function fetchWithRetry(url, nRetries = 5) {
+async function fetchWithRetry(url, options = undefined, nRetries = 5) {
   const statusCodes = []
   for (let i = 0; i < nRetries; i += 1) {
-    const res = await fetch(url);
+    const res = await fetch(url, options);
     if (res.ok) {
       return await res.json();
     } else {
@@ -86,6 +86,7 @@ const build = (grnPath) => {
   
   // Add display text for showing selected node information
   const displayText = textContainer.append("xhtml:p").style("margin", "0.5rem 0");
+  const scoreText = textContainer.append("xhtml:p").style("margin", "0.5rem 0");
   const displayTextBreaks = " <br> <br> <br> <br> <br> <br>"
   const emptyDisplayText = `Click around or search to see more.${displayTextBreaks}`
   displayText.html(emptyDisplayText);
@@ -314,22 +315,32 @@ const build = (grnPath) => {
       if (!d) {
         deselectNode()
         displayText.html(`Gene/Peak '${nodeId}' not found. ${displayTextBreaks}`)
+        scoreText.html("")
         return
       }
+      fetchWithRetry('/plot', { method: 'POST', body: JSON.stringify(d), headers: { 'Content-Type': 'application/json'}})
+        .then((res) => {
+          scoreText.html(`<image src="${res.path}" style="width: 100%;">`)
+      })
       svg.select(`#id${d.id}`).attr("stroke", "red")
       selectedEdges.forEach(e => {
         svg.select(`#index${e.index}`).attr("opacity", 1)
         svg.select(`#id${e.source.id}`).attr("opacity", 1)
         svg.select(`#id${e.target.id}`).attr("opacity", 1)
       })
-      
+
       displayText.html(`${d.node_type === 'peak' ? 'Peak' : 'Gene'}: ${d.id}<br/>
         ${d.chr}:${d.start}-${d.end}<br/>
         ${d.node_type === 'gene' ? `<a target="_blank" href="https://www.genecards.org/cgi-bin/carddisp.pl?gene=${d.id}">View on GeneCards</a>` : 
-          `<a target="_blank" href="https://screen.wenglab.org/search?assembly=GRCh38&chromosome=${d.chr}&start=${d.start}&end=${d.end}">View in SCREEN</a>`}<br/>
-        Condition sensitivity: ${['Heart', 'Lung', 'Liver'].map(organ => d[organ].condition_sensitivity.toFixed(2)).join(" ")}<br/>
-        Organ specificity: ${['Heart', 'Lung', 'Liver'].map(organ => d[organ].organ_specificity.toFixed(2)).join(" ")}<br/>
-        Universality: ${d.universality.toFixed(5)}`);
+          `<a target="_blank" href="https://screen.wenglab.org/search?assembly=GRCh38&chromosome=${d.chr}&start=${d.start}&end=${d.end}">View in SCREEN</a>`}`)
+      
+      // displayText.html(`${d.node_type === 'peak' ? 'Peak' : 'Gene'}: ${d.id}<br/>
+      //   ${d.chr}:${d.start}-${d.end}<br/>
+      //   ${d.node_type === 'gene' ? `<a target="_blank" href="https://www.genecards.org/cgi-bin/carddisp.pl?gene=${d.id}">View on GeneCards</a>` : 
+      //     `<a target="_blank" href="https://screen.wenglab.org/search?assembly=GRCh38&chromosome=${d.chr}&start=${d.start}&end=${d.end}">View in SCREEN</a>`}<br/>
+      //   Condition sensitivity: ${['Heart', 'Lung', 'Liver'].map(organ => d[organ].condition_sensitivity.toFixed(2)).join(" ")}<br/>
+      //   Organ specificity: ${['Heart', 'Lung', 'Liver'].map(organ => d[organ].organ_specificity.toFixed(2)).join(" ")}<br/>
+      //   Universality: ${d.universality.toFixed(5)}`);
 
       const endTransform = [d.x, d.y, width / 5];
       const i = d3.interpolateZoom(currTransform, endTransform)
