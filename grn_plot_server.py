@@ -9,13 +9,29 @@ from dotenv import load_dotenv
 from pathlib import Path
 from plot_utils import plot_expression, plot_peak
 import anndata as ad
+import requests
+from google.cloud import storage
 
 app = Flask(__name__, template_folder='./', static_url_path='', static_folder='./')
 
 load_dotenv()
 
-rna_ad = ad.read_h5ad(os.environ['RNA_ADATA'])
-atac_ad = ad.read_h5ad(os.environ['ATAC_ADATA'])
+if os.environ['ENV_TYPE'] == 'production':
+  rna_data_res = requests.get(os.environ['RNA_ADATA'])
+  with open('/tmp/rna_adata.h5ad', 'w') as f:
+    f.write(rna_data_res.content)
+  
+  rna_ad = ad.read_h5ad('/tmp/rna_adata.h5ad')
+
+  atac_data_res = requests.get(os.environ['ATAC_ADATA'])
+  with open('/tmp/atac_adata.h5ad', 'w') as f:
+    f.write(atac_data_res.content)
+
+  atac_ad = ad.read_h5ad('/tmp/atac_adata.h5ad')
+else:
+  rna_ad = ad.read_h5ad(os.environ['RNA_ADATA'])
+  atac_ad = ad.read_h5ad(os.environ['ATAC_ADATA'])
+
 grn_path = os.environ['GRN_DATA']
 
 @app.route('/')
