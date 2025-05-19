@@ -4,7 +4,7 @@
     <title>PG-SCOTT GRN</title>
     <script type="module">
       import { build } from "./visualize_grn.js";
-      const grnElement = build("./data/grn.json")
+      const grnElement = build({{ grn_data|tojson }})
       document.getElementById("container").append(grnElement);
     </script>
   </head>

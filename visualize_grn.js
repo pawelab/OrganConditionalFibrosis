@@ -318,9 +318,14 @@ const build = (grnPath) => {
         scoreText.html("")
         return
       }
-      fetchWithRetry('/plot', { method: 'POST', body: JSON.stringify(d), headers: { 'Content-Type': 'application/json'}})
-        .then((res) => {
-          scoreText.html(`<image src="${res.path}" style="width: 100%;">`)
+      fetchWithRetry('/plot', 
+        { method: 'POST', body: JSON.stringify(d), headers: { 'Content-Type': 'application/json'}}
+      ).then((res) => {
+        scoreText.html(`<image src="${res.path}" style="width: 100%;">`)
+      }).catch((_err) => {
+        scoreText.html(`Condition sensitivity: ${['Heart', 'Lung', 'Liver'].map(organ => d[organ].condition_sensitivity.toFixed(2)).join(" ")}<br/>
+        Organ specificity: ${['Heart', 'Lung', 'Liver'].map(organ => d[organ].organ_specificity.toFixed(2)).join(" ")}<br/>
+        Universality: ${d.universality.toFixed(5)}`);
       })
       svg.select(`#id${d.id}`).attr("stroke", "red")
       selectedEdges.forEach(e => {
