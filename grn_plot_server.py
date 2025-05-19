@@ -17,11 +17,9 @@ load_dotenv()
 
 if os.environ['ENV_TYPE'] == 'production':
   rna_data_res = requests.get(os.environ['RNA_ADATA'])
-  if not rna_data_res.ok:
-    print(rna_data_res.status_code)
-    print(rna_data_res.reason)
+  print(len(rna_data_res.content))
   with open('rna_adata.h5ad', 'wb') as f:
-    f.write(rna_data_res.content)
+    print(f.write(rna_data_res.content))
   
   rna_ad = ad.read_h5ad('rna_adata.h5ad')
 
