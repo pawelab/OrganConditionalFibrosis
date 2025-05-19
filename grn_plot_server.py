@@ -10,18 +10,22 @@ from pathlib import Path
 from plot_utils import plot_expression, plot_peak
 import anndata as ad
 import requests
+import shutil
 
 app = Flask(__name__, template_folder='./', static_url_path='', static_folder='./')
 
 load_dotenv()
 
 if os.environ['ENV_TYPE'] == 'production':
-  rna_data_res = requests.get(os.environ['RNA_ADATA'])
-  print(rna_data_res.headers['content-type'])
-  print(rna_data_res.headers['content-length'])
-  print(len(rna_data_res.content))
-  with open('rna_adata.h5ad', 'wb') as f:
-    print(f.write(rna_data_res.content))
+  with requests.get(os.environ['RNA_ADATA'], stream=True) as response:
+    with open('rna_adata.h5ad', 'wb') as out_file:
+      shutil.copyfileobj(response.raw, out_file)
+  # rna_data_res = requests.get(os.environ['RNA_ADATA'])
+  # print(rna_data_res.headers['content-type'])
+  # print(rna_data_res.headers['content-length'])
+  # print(len(rna_data_res.content))
+  # with open('rna_adata.h5ad', 'wb') as f:
+  #   print(f.write(rna_data_res.content))
   
   rna_ad = ad.read_h5ad('rna_adata.h5ad')
 
