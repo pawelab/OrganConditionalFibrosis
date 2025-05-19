@@ -54,4 +54,5 @@ if __name__ == '__main__':  # run locally
     app.config['tmpdir'] = os.path.basename(tmpdir)
     app.run()
 else:  # run on server
-  app.config['tmpdir'] = '/tmp'
+  os.mkdir('tmp')
+  app.config['tmpdir'] = 'tmp'
