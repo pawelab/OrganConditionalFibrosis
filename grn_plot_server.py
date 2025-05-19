@@ -18,6 +18,7 @@ load_dotenv()
 
 if os.environ['ENV_TYPE'] == 'production':
   with requests.get(os.environ['RNA_ADATA'], stream=True) as response:
+    print(response.status_code)
     with open('rna_adata.h5ad', 'wb') as out_file:
       shutil.copyfileobj(response.raw, out_file)
   # rna_data_res = requests.get(os.environ['RNA_ADATA'])
@@ -26,6 +27,8 @@ if os.environ['ENV_TYPE'] == 'production':
   # print(len(rna_data_res.content))
   # with open('rna_adata.h5ad', 'wb') as f:
   #   print(f.write(rna_data_res.content))
+
+  print(os.stat('rna_adata.h5ad').st_size)
   
   rna_ad = ad.read_h5ad('rna_adata.h5ad')
 
