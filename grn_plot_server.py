@@ -18,16 +18,16 @@ load_dotenv()
 
 if os.environ['ENV_TYPE'] == 'production':
   rna_data_res = requests.get(os.environ['RNA_ADATA'])
-  with open('/tmp/rna_adata.h5ad', 'wb') as f:
+  with open('rna_adata.h5ad', 'wb') as f:
     f.write(rna_data_res.content)
   
-  rna_ad = ad.read_h5ad('/tmp/rna_adata.h5ad')
+  rna_ad = ad.read_h5ad('rna_adata.h5ad')
 
   atac_data_res = requests.get(os.environ['ATAC_ADATA'])
-  with open('/tmp/atac_adata.h5ad', 'wb') as f:
+  with open('atac_adata.h5ad', 'wb') as f:
     f.write(atac_data_res.content)
 
-  atac_ad = ad.read_h5ad('/tmp/atac_adata.h5ad')
+  atac_ad = ad.read_h5ad('atac_adata.h5ad')
 else:
   rna_ad = ad.read_h5ad(os.environ['RNA_ADATA'])
   atac_ad = ad.read_h5ad(os.environ['ATAC_ADATA'])
