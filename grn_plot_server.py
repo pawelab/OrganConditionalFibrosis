@@ -6,7 +6,6 @@ from flask import Flask, request, render_template
 from tempfile import TemporaryDirectory
 import os
 from dotenv import load_dotenv
-from pathlib import Path
 from plot_utils import plot_expression, plot_peak
 import anndata as ad
 import requests
@@ -18,23 +17,14 @@ load_dotenv()
 
 if os.environ['ENV_TYPE'] == 'production':
   with requests.get(os.environ['RNA_ADATA'], stream=True) as response:
-    print(response.status_code)
     with open('rna_adata.h5ad', 'wb') as out_file:
       shutil.copyfileobj(response.raw, out_file)
-  # rna_data_res = requests.get(os.environ['RNA_ADATA'])
-  # print(rna_data_res.headers['content-type'])
-  # print(rna_data_res.headers['content-length'])
-  # print(len(rna_data_res.content))
-  # with open('rna_adata.h5ad', 'wb') as f:
-  #   print(f.write(rna_data_res.content))
 
-  print(os.stat('rna_adata.h5ad').st_size)
-  
   rna_ad = ad.read_h5ad('rna_adata.h5ad')
 
-  atac_data_res = requests.get(os.environ['ATAC_ADATA'])
-  with open('atac_adata.h5ad', 'wb') as f:
-    f.write(atac_data_res.content)
+  with requests.get(os.environ['ATAC_ADATA'], stream=True) as response:
+    with open('atac_adata.h5ad', 'wb') as out_file:
+      shutil.copyfileobj(response.raw, out_file)
 
   atac_ad = ad.read_h5ad('atac_adata.h5ad')
 else:
