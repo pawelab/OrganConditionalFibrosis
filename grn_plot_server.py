@@ -10,7 +10,6 @@ from pathlib import Path
 from plot_utils import plot_expression, plot_peak
 import anndata as ad
 import requests
-from google.cloud import storage
 
 app = Flask(__name__, template_folder='./', static_url_path='', static_folder='./')
 
@@ -20,6 +19,9 @@ if os.environ['ENV_TYPE'] == 'production':
   rna_data_res = requests.get(os.environ['RNA_ADATA'])
   with open('rna_adata.h5ad', 'wb') as f:
     f.write(rna_data_res.content)
+
+  print(os.listdir())
+  print(os.getcwd())
   
   rna_ad = ad.read_h5ad('rna_adata.h5ad')
 
