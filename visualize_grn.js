@@ -1,15 +1,8 @@
 import * as d3 from "https://cdn.jsdelivr.net/npm/d3@7/+esm";
-// import spawn from 'node:child_process';
-
-// spawn('echo', ['foobar'])
 
 // Declare the chart dimensions and margins.
 let width = window.innerWidth;
 let height = window.innerHeight;
-// const marginTop = 20;
-// const marginRight = 20;
-// const marginBottom = 30;
-// const marginLeft = 40;
 
 // Used for transforming the view to a specific xy coordinate and with view radius r
 function transform([x, y, r]) {
@@ -38,7 +31,7 @@ function dataToColor(data) {
   const blue = data.Liver.organ_specificity
   const scalePositive = [red, green, blue].map(col => col + 1 / 3).map(col => Math.max(col, 0.0))
   const max = Math.max(...scalePositive)
-  const hex = scalePositive.map(col => col * 1 / max).map(col => Math.round(col * 255).toString(16).padStart(2, "0")).join("")
+  const hex = scalePositive.map(col => col / max).map(col => Math.round(col * 255).toString(16).padStart(2, "0")).join("")
   return `#${hex}`;
 }
 
@@ -60,12 +53,6 @@ async function fetchWithRetry(url, options = undefined, nRetries = 5) {
 const build = (grnPath) => {
   // Start fetching grn data, but build the static parts and display in the meantime, then load the grn data into the svg
   const res = fetchWithRetry(grnPath);
-
-  // Specify the color scale.
-  const heart = dataToColor(Object.fromEntries([['Heart', 1.0], ['Lung', -0.5], ['Liver', -0.5]].map(([organ, val]) => [organ, {organ_specificity: val}])))
-  const lung = dataToColor(Object.fromEntries([['Heart', -0.5], ['Lung', 1.0], ['Liver', -0.5]].map(([organ, val]) => [organ, {organ_specificity: val}])))
-  const liver = dataToColor(Object.fromEntries([['Heart', -0.5], ['Lung', -0.5], ['Liver', 1.0]].map(([organ, val]) => [organ, {organ_specificity: val}])))
-  const universal = dataToColor(Object.fromEntries([['Heart', 0.0], ['Lung', 0.0], ['Liver', 0.0]].map(([organ, val]) => [organ, {organ_specificity: val}])))
 
   const container = d3.create("div").style("display", "flex")
 
@@ -108,18 +95,65 @@ const build = (grnPath) => {
     .attr("d", "M0,-5L10,0L0,5");
 
   // Add a legend for colors
-  const colors = [[heart, "Heart"], [lung, "Lung"], [liver, "Liver"]]
-  colors.forEach(([fillColor, txt]) => {
-    textContainer.append("svg")
-    .attr("width", 12)
-    .attr("height", 12)
-    .append("rect")
-      .attr("width", 12)
-      .attr("height", 12)
-      .attr("rx", 2)
-      .attr("fill", fillColor)
-    textContainer.append("span").style("margin", "0 15px 0 5px").text(txt)
-  })
+  textContainer.append("p").style("margin", "0").style("text-align", "center").text("Heart")
+  
+  const colorKey = textContainer.append("div")
+    .style("margin", "0")
+    .style("justify-self", "center")
+
+  const sideStep = 0.02
+  const vertColorStep = sideStep / Math.sqrt(3)  // Length = sqrt(3)x
+  const horColorStep = sideStep / 2  // Length = 2x
+  for (let heart = 1 + vertColorStep; heart > -vertColorStep; heart -= vertColorStep) {
+    const row = colorKey.append("div")
+      .style("display", "block")
+      .style("height", "2px")
+      .style("margin", 0)
+      .style("padding", 0)
+    const addColor = (h, l) => {
+      const liver = 1 - (h + l)
+      let fillColor = '#fff'
+      if (liver >= -horColorStep) {
+        fillColor = dataToColor({
+          Heart: { organ_specificity: h - 1/3 },
+          Lung: { organ_specificity: l - 1/3 },
+          Liver: { organ_specificity: liver - 1/3 }
+        })
+      }
+      const rgb = [fillColor.slice(1, 3), fillColor.slice(3, 5), fillColor.slice(5, 7)].map(n => Number.parseInt(n, 16))
+      const sumScaled = Math.pow(Math.round((rgb[0] + rgb[1] + rgb[2]) / 255) + 1, 2)
+      const colorsWithinBuffer = []
+      for (let offsetR = -sumScaled; offsetR <= sumScaled; offsetR += 1) {
+        for (let offsetG = -sumScaled; offsetG <= sumScaled; offsetG += 1) {
+          for (let offsetB = -sumScaled; offsetB <= sumScaled; offsetB += 1) {
+            colorsWithinBuffer.push((rgb[0] + offsetR).toString(16).padStart(2, "0") + 
+                                    (rgb[1] + offsetG).toString(16).padStart(2, "0") + 
+                                    (rgb[2] + offsetB).toString(16).padStart(2, "0"))
+          }
+        }
+      }
+      row.append("svg")
+      .attr("width", 2)
+      .attr("height", 2)
+      .style("margin", 0)
+      .style("vertical-align", "top")
+      .append("rect")
+        .attr("width", 2)
+        .attr("height", 2)
+        .attr("fill", fillColor)
+        .style("stroke-width", 2)
+        .attr("class", `${colorsWithinBuffer.map(c => `color${c}`).join(" ")}`)
+    }
+    for (let i = 0; i < heart; i += 2 * horColorStep) {
+      addColor(1, 1)
+    }
+    for (let lung = 1 - heart; lung >= -horColorStep; lung -= horColorStep) {
+      addColor(heart, lung)
+    }
+  }
+
+  textContainer.append("span").style("margin", "0 170px 0 0").text("Lung")
+  textContainer.append("span").text("Liver")
 
   // Add a legend for shapes
   textContainer.append("br")
@@ -306,7 +340,8 @@ const build = (grnPath) => {
 
     // Zoom to a node with the given data, show data in displayText
     function selectNode(nodeId) {
-      node.attr("stroke", "#000")
+      colorKey.selectAll("rect").style("stroke", "none")
+      node.attr("stroke-width", 0.5)
       node.attr("opacity", 0.1)
       link.attr("opacity", 0.1)
       const d = nodes.find(n => n.id === nodeId)
@@ -321,13 +356,15 @@ const build = (grnPath) => {
       fetchWithRetry('/plot', 
         { method: 'POST', body: JSON.stringify(d), headers: { 'Content-Type': 'application/json'}}
       ).then((res) => {
-        scoreText.html(`<image src="${res.path}" style="width: 100%;">`)
+        scoreText.html(`<image src="${res.path}" style="width: 100%; min-height: 180px">`)
       }).catch((_err) => {
         scoreText.html(`Condition sensitivity: ${['Heart', 'Lung', 'Liver'].map(organ => d[organ].condition_sensitivity.toFixed(2)).join(" ")}<br/>
         Organ specificity: ${['Heart', 'Lung', 'Liver'].map(organ => d[organ].organ_specificity.toFixed(2)).join(" ")}<br/>
         Universality: ${d.universality.toFixed(5)}`);
       })
-      svg.select(`#id${d.id}`).attr("stroke", "red")
+      svg.select(`#id${d.id}`).attr("stroke-width", 1.5)
+      const selectedColor = svg.select(`#id${d.id}`).attr("fill").substring(1);
+      colorKey.select(`.color${selectedColor}`).style("stroke", "black")
       selectedEdges.forEach(e => {
         svg.select(`#index${e.index}`).attr("opacity", 1)
         svg.select(`#id${e.source.id}`).attr("opacity", 1)
@@ -338,14 +375,6 @@ const build = (grnPath) => {
         ${d.chr}:${d.start}-${d.end}<br/>
         ${d.node_type === 'gene' ? `<a target="_blank" href="https://www.genecards.org/cgi-bin/carddisp.pl?gene=${d.id}">View on GeneCards</a>` : 
           `<a target="_blank" href="https://screen.wenglab.org/search?assembly=GRCh38&chromosome=${d.chr}&start=${d.start}&end=${d.end}">View in SCREEN</a>`}`)
-      
-      // displayText.html(`${d.node_type === 'peak' ? 'Peak' : 'Gene'}: ${d.id}<br/>
-      //   ${d.chr}:${d.start}-${d.end}<br/>
-      //   ${d.node_type === 'gene' ? `<a target="_blank" href="https://www.genecards.org/cgi-bin/carddisp.pl?gene=${d.id}">View on GeneCards</a>` : 
-      //     `<a target="_blank" href="https://screen.wenglab.org/search?assembly=GRCh38&chromosome=${d.chr}&start=${d.start}&end=${d.end}">View in SCREEN</a>`}<br/>
-      //   Condition sensitivity: ${['Heart', 'Lung', 'Liver'].map(organ => d[organ].condition_sensitivity.toFixed(2)).join(" ")}<br/>
-      //   Organ specificity: ${['Heart', 'Lung', 'Liver'].map(organ => d[organ].organ_specificity.toFixed(2)).join(" ")}<br/>
-      //   Universality: ${d.universality.toFixed(5)}`);
 
       const endTransform = [d.x, d.y, width / 5];
       const i = d3.interpolateZoom(currTransform, endTransform)
@@ -357,10 +386,11 @@ const build = (grnPath) => {
     }
 
     function deselectNode() {
-      node.attr("stroke", "#000")
+      node.attr("stroke-width", 0.5)
       node.attr("opacity", 1)
       link.attr("opacity", 1)
       displayText.html(emptyDisplayText)
+      colorKey.selectAll("rect").style("stroke", "none")
     }
 
     // Add search listener
