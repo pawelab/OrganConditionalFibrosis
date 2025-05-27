@@ -345,7 +345,13 @@ const build = (grnPath) => {
       node.attr("opacity", 0.1)
       link.attr("opacity", 0.1)
       const d = nodes.find(n => n.id === nodeId)
-      const selectedEdges = links.filter(e => e.source.id === nodeId || e.target.id === nodeId)
+      const outEdges = links.filter(e => e.source.id === nodeId)
+      const inEdges = links.filter(e => e.target.id === nodeId)
+      const selectedEdges = [...outEdges, ...inEdges]
+      if (d.node_type === 'gene') {
+        // Map back to closest TF
+        selectedEdges.push(...inEdges.flatMap(inE => links.filter(e => e.target.id === inE.source.id)))
+      }
       selected = nodeId
       if (!d) {
         deselectNode()
